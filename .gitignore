@@ -1,0 +1,32 @@
+#Secrets
+.env
+
+# Other env files, but keep the template
+.env.*
+!.env.example
+
+# Python virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local database
+*.db
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+# Flask-SQLAlchemy can put the database here by default
+instance/
+
+# Editor and OS files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# SQLite extras
+*.sqlite3
+*.db-journal
