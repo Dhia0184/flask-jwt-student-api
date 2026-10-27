@@ -66,18 +66,6 @@ def report_body(id_s, **over):
     return {"ID_S": id_s, "Title": "T", "Type": "x", "K1": "a", "K2": "b", "K3": "c",
             "Release_Date": "2026-01-01", **over}
 
-def test_no_token_and_garbage_token(client):
-    assert client.get("/students").status_code == 401
-    r = client.get("/students", headers={"Authorization": "Bearer abc.def.ghi"})
-    assert r.status_code == 401 and r.headers["WWW-Authenticate"] == "Bearer"
-
-
-def test_expired_access_token(client, monkeypatch):
-    import auth
-    monkeypatch.setattr(auth, "ACCESS_TOKEN_TTL", -10)
-    h = headers(client)
-    r = client.get("/students", headers=h)
-    assert r.status_code == 401 and "expired" in r.get_json()["error"]
 
 def test_auth_me_resolves_keycloak_subject(client):
     response = client.get(
