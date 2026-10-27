@@ -1,5 +1,4 @@
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import check_password_hash, generate_password_hash
 
 db = SQLAlchemy()
 
@@ -57,16 +56,16 @@ class User(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(255), nullable=False)
+    keycloak_sub = db.Column(
+    db.String(255),
+    unique=True,
+    nullable=True,
+    index=True)
+
     role = db.Column(db.String(10), nullable=False, default=ROLE_STUDENT)
     # Links a login to a student record (lets a student read/edit only their own data)
     ID_S = db.Column(db.Integer, db.ForeignKey("students.ID_S"), nullable=True)
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
     def to_dict(self):
         return {"id": self.id, "username": self.username, "role": self.role, "ID_S": self.ID_S}
+    

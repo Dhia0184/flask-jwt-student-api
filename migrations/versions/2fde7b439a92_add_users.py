@@ -21,7 +21,6 @@ def upgrade():
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('username', sa.String(length=50), nullable=False),
-    sa.Column('password_hash', sa.String(length=255), nullable=False),
     sa.Column('role', sa.String(length=10), nullable=False),
     sa.Column('ID_S', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['ID_S'], ['students.ID_S'], ),

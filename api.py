@@ -1,18 +1,15 @@
 import os
 from datetime import date
 
-import click
-import jwt
 from dotenv import load_dotenv
 from flask import Flask, g, jsonify, request
 from flask_migrate import Migrate
 from sqlalchemy import func, select
 from werkzeug.exceptions import HTTPException
-from werkzeug.security import check_password_hash, generate_password_hash
 
 load_dotenv()
 
-from auth import auth_required, create_token, decode_token, ACCESS_TOKEN_TTL  # noqa: E402
+from auth import auth_required
 from models import ROLE_ADMIN, ROLE_STUDENT, Report, Student, User, db  # noqa: E402
 
 app = Flask(__name__)
@@ -27,10 +24,6 @@ REPORT_FIELDS = ["ID_S", "Title", "Type", "K1", "K2", "K3", "Release_Date"]
 STUDENT_FIELDS = ["FN", "LN", "DMjr", "Level"]
 MAX_REPORTS_PER_STUDENT = 2
 
-# Used to keep login timing similar whether or not the username exists
-_DUMMY_HASH = generate_password_hash("not-a-real-password")
-
-
 # ----------------------------------------------------------------- errors
 @app.errorhandler(HTTPException)
 def handle_http_exception(error):
@@ -38,7 +31,7 @@ def handle_http_exception(error):
     response.set_data(app.json.dumps({"error": error.description}))
     response.content_type = "application/json"
     return response
-
+ 
 
 @app.errorhandler(Exception)
 def handle_unexpected_exception(error):
@@ -148,91 +141,6 @@ def commit_or_500(action):
 
 
 # ------------------------------------------------------------------- auth
-@app.route("/auth/register", methods=["POST"])
-@auth_required(ROLE_ADMIN)
-def register():
-    """Admin-only: create a login, optionally linked to a student record."""
-    data, err = json_body(["username", "password"])
-    if err:
-        return err
-
-    username, password = data["username"], data["password"]
-    role = data.get("role", ROLE_STUDENT)
-    student_id = data.get("ID_S")
-
-    if not isinstance(username, str) or not 3 <= len(username.strip()) <= 50:
-        return jsonify({"error": "username must be 3 to 50 characters"}), 400
-    if not isinstance(password, str) or len(password) < 8:
-        return jsonify({"error": "password must be at least 8 characters"}), 400
-    if role not in (ROLE_ADMIN, ROLE_STUDENT):
-        return jsonify({"error": "role must be 'admin' or 'student'"}), 400
-    if student_id is not None:
-        if type(student_id) is not int:
-            return jsonify({"error": "ID_S must be an integer"}), 400
-        if db.session.get(Student, student_id) is None:
-            return jsonify({"error": "Student not found"}), 404
-
-    username = username.strip()
-    if db.session.scalar(select(User).filter_by(username=username)) is not None:
-        return jsonify({"error": "Username already taken"}), 409
-
-    user = User(username=username, role=role, ID_S=student_id)
-    user.set_password(password)
-    db.session.add(user)
-    if (err := commit_or_500("create user")) is not None:
-        return err
-    return jsonify(user.to_dict()), 201
-
-
-@app.route("/auth/login", methods=["POST"])
-def login():
-    data, err = json_body(["username", "password"])
-    if err:
-        return err
-
-    username, password = data["username"], data["password"]
-    if not isinstance(username, str) or not isinstance(password, str):
-        return jsonify({"error": "username and password must be strings"}), 400
-
-    user = db.session.scalar(select(User).filter_by(username=username.strip()))
-    if user is None:
-        check_password_hash(_DUMMY_HASH, password)  # same work as a real check
-        valid = False
-    else:
-        valid = user.check_password(password)
-
-    if not valid:
-        return jsonify({"error": "Invalid username or password"}), 401
-
-    return jsonify({
-        "access_token": create_token(user, "access"),
-        "refresh_token": create_token(user, "refresh"),
-        "token_type": "Bearer",
-        "expires_in": ACCESS_TOKEN_TTL,
-    }), 200
-
-
-@app.route("/auth/refresh", methods=["POST"])
-def refresh():
-    data, err = json_body(["refresh_token"])
-    if err:
-        return err
-    try:
-        payload = decode_token(str(data["refresh_token"]), "refresh")
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Invalid or expired refresh token"}), 401
-
-    user = db.session.get(User, int(payload["sub"]))
-    if user is None:
-        return jsonify({"error": "Invalid or expired refresh token"}), 401
-
-    return jsonify({
-        "access_token": create_token(user, "access"),
-        "token_type": "Bearer",
-        "expires_in": ACCESS_TOKEN_TTL,
-    }), 200
-
-
 @app.route("/auth/me", methods=["GET"])
 @auth_required()
 def me():
@@ -411,24 +319,6 @@ def delete_student(student_id):
     if (err := commit_or_500("delete student")) is not None:
         return err
     return jsonify({"message": "Student deleted"}), 200
-
-
-# -------------------------------------------------------------------- CLI
-@app.cli.command("create-admin")
-@click.argument("username")
-@click.password_option()
-def create_admin(username, password):
-    """Create the first admin: flask --app api create-admin <username>"""
-    if len(password) < 8:
-        raise click.ClickException("Password must be at least 8 characters")
-    if db.session.scalar(select(User).filter_by(username=username)) is not None:
-        raise click.ClickException("Username already taken")
-    user = User(username=username, role=ROLE_ADMIN)
-    user.set_password(password)
-    db.session.add(user)
-    db.session.commit()
-    click.echo(f"Admin '{username}' created.")
-
 
 if __name__ == "__main__":
     app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
