@@ -81,7 +81,7 @@ def auth_required(*roles):
                 return _unauthorized()
             user = User.query.filter_by(keycloak_sub=payload["sub"]).first()
             if user is None:
-                return jsonify({"This Keycloak identity is not linked to any local account"}), 403
+                return jsonify({"error": "This Keycloak identity is not linked to any local account"}), 403
             if roles and user.role not in roles:
                 return jsonify({"error": "You do not have permission to do this"}), 403
 
